@@ -60,17 +60,36 @@ DEEPSEEK_API_KEY="your_deepseek_api_key"
 PEXELS_API_KEY="your_pexels_api_key"
 ```
 
-### How to Use
+## How to Use
 
-Run the script from your terminal using the main.py entry point. Provide the desired presentation topic as a command-line argument, enclosed in quotes.
+Run the script from your terminal using the `main.py` entry point. Provide the desired presentation topic, and optionally specify the number of slides and a visual style.
 
-# Example
+### Basic Usage
 
 ```bash
 python main.py "The Evolution of Artificial Intelligence"
 ```
 
-The script will print its progress to the console and, upon completion, will save the generated .pptx file in the output/ directory.
+### Advanced Usage
+
+## Specify Slide Count:
+Use the --slides flag to control the number of content slides.
+
+```bash
+python main.py "The History of Ancient Rome" --slides 8
+```
+## Specify Visual Style:
+Use the --style flag to choose a theme. Options are dark (default), light, and corporate.
+
+```bash
+python main.py "Principles of Graphic Design" --style light
+```
+
+## Combine Options:
+
+```bash
+python main.py "The Future of Renewable Energy" --slides 6 --style corporate
+```
 
 ### Future Development
 

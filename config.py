@@ -1,23 +1,69 @@
+# config.py - Enhanced Configuration Management
 import os
-from dotenv import load_dotenv
 from pathlib import Path
+from dotenv import load_dotenv
+from typing import Dict, Tuple
 
+# Load environment variables
 load_dotenv()
 
-# --- API Keys ---
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY") # <-- ADD THIS
-# UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY") # No longer primary
+class PPTConfig:
+    """Centralized configuration for PowerPoint generation"""
+    
+    # --- API Configuration ---
+    API_KEYS = {
+        'DEEPSEEK': os.getenv("DEEPSEEK_API_KEY"),
+        'PEXELS': os.getenv("PEXELS_API_KEY"),
+        'GOOGLE': os.getenv("GOOGLE_API_KEY"),
+        'UNSPLASH': os.getenv("UNSPLASH_ACCESS_KEY", "")  # Optional
+    }
+    
+    # --- File System Paths ---
+    BASE_DIR = Path(__file__).resolve().parent
+    PATHS = {
+        'output': BASE_DIR / "output",
+        'cache': BASE_DIR / "downloads" / "cache",
+        'temp': BASE_DIR / "downloads" / "temp",
+        'assets': BASE_DIR / "assets",
+        'fonts': BASE_DIR / "fonts",
+        'templates': BASE_DIR / "templates"
+    }
+    
+    # --- Presentation Standards ---
+    SLIDE_DIMENSIONS = (16, 9)  # Width, Height in inches
+    IMAGE_STANDARDS = {
+        'min_resolution': (1920, 1080),  # Width, Height in pixels
+        'aspect_ratio': (16, 9),
+        'max_file_size_mb': 5
+    }
+    
+    # --- API Rate Limits ---
+    RATE_LIMITS = {
+        'pexels': 200,  # requests/hour
+        'unsplash': 50,
+        'google': 60    # requests/minute
+    }
+    
+    @classmethod
+    def validate(cls) -> Tuple[bool, str]:
+        """Validate critical configurations"""
+        # Check API keys
+        if not cls.API_KEYS['GOOGLE']:
+            return False, "Google API key is required"
+        if not cls.API_KEYS['PEXELS']:
+            return False, "Pexels API key is required"
+            
+        # Ensure directories exist
+        for path in cls.PATHS.values():
+            path.mkdir(parents=True, exist_ok=True)
+            
+        return True, "Configuration valid"
 
-# --- Project Paths ---
-# ... (rest of the file is unchanged)
-BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "output"
-CACHE_DIR = BASE_DIR / "downloads" / "cache"
+# Initialize and validate configuration
+config_valid, config_error = PPTConfig.validate()
+if not config_valid:
+    raise RuntimeError(f"Configuration Error: {config_error}")
 
-OUTPUT_DIR.mkdir(exist_ok=True)
-CACHE_DIR.mkdir(exist_ok=True)
-
-# --- Default Settings ---
-PPT_SLIDE_WIDTH_INCHES = 16
-PPT_SLIDE_HEIGHT_INCHES = 9
+# Legacy variable support (for gradual migration)
+OUTPUT_DIR = PPTConfig.PATHS['output']
+CACHE_DIR = PPTConfig.PATHS['cache']

@@ -1,62 +1,69 @@
 import argparse
-import config
-
-# Import the new function
-from orchestration.content_engine import generate_slide_outline, choose_best_image, generate_speaker_notes
-from orchestration.image_engine import search_for_images, download_image
+import config # Imports the class-based config
+from orchestration.content_engine import (
+    generate_slide_outline,
+    decide_slide_layout,
+    generate_visual_keyword,
+    generate_diagram_code
+)
+from orchestration.image_engine import search_and_download_photo, render_diagram_local
 from orchestration.visual_engine import create_presentation
 
 def main():
-    # Check if API keys are set
-    if not config.DEEPSEEK_API_KEY or not config.PEXELS_API_KEY:
-        print("Error: API keys for DeepSeek or Pexels are not set.")
-        print("Please check your .env file.")
-        return
-
-    # Set up command-line argument parsing
-    parser = argparse.ArgumentParser(description="Smart PPT Generator")
-    parser.add_argument("topic", type=str, help="The topic of the presentation.")
+    parser = argparse.ArgumentParser(description="The Majestic PPT Generator")
+    parser.add_argument("topic", type=str, help="The main topic of the presentation.")
+    parser.add_argument("--slides", type=int, default=5, help="Approximate number of slides.")
+    parser.add_argument("--style", type=str, default="dark", choices=["dark", "light"], help="Visual theme.")
     args = parser.parse_args()
-    
-    topic = args.topic
-    print(f"--- Starting Smart PPT Generator for topic: '{topic}' ---")
 
-    # 1. Generate Content
-    slide_outline = generate_slide_outline(topic)
-    if not slide_outline:
-        print("--- Process failed: Could not generate content. ---")
+    topic = args.topic
+    slide_count = args.slides
+    style = args.style
+    print(f"--- Generating the Majestic Presentation ---")
+    print(f"Topic: '{topic}', Slides: {slide_count}, Style: '{style}'")
+    
+    # Use the new config class for validation
+    if not all([config.PPTConfig.API_KEYS['GOOGLE'], config.PPTConfig.API_KEYS['PEXELS']]):
+        print("FATAL: API keys are missing.")
         return
 
-    # 2. Process each slide to find and select the best image
-    for slide in slide_outline:
-        slide["image_path"] = None # Default to no image
-        keyword = slide.get("image_keyword")
-        title = slide.get("slide_title")
-        body = slide.get("slide_body", "")
+    slide_outline = generate_slide_outline(topic, slide_count)
+    if not slide_outline: return
+
+    print("\n--- Designing Individual Slides ---")
+    enriched_slides = []
+    themes = {'dark': {'primary': (52, 152, 219), 'secondary': (44, 62, 80)}}
+    theme_colors = themes.get(style, themes['dark'])
+
+    for i, slide_data in enumerate(slide_outline):
+        title, body = slide_data['slide_title'], slide_data['slide_body']
+        print(f"\n-> Designing Slide {i+1}: '{title}'")
+        layout = "Title Layout" if i == 0 else decide_slide_layout(title, body)
+        keyword = generate_visual_keyword(title, layout)
         
-        if keyword and title:
-            # Step 2a: Search for image candidates
-            image_candidates = search_for_images(keyword)
-            
-            if image_candidates:
-                # Step 2b: Use AI to choose the best image
-                chosen_image = choose_best_image(title, image_candidates)
+        slide_data['layout'] = layout
+        slide_data['image_path'] = None
 
-                if chosen_image:
-                    # Step 2c: Download ONLY the chosen image
-                    image_path = download_image(chosen_image['url'], keyword)
-                    slide["image_path"] = image_path
+        if "Diagram" in layout:
+            dot_code = generate_diagram_code(title, body, theme_colors)
+            if dot_code:
+                diagram_path = render_diagram_local(dot_code, title)
+                if diagram_path:
+                    slide_data['image_path'] = diagram_path
+                else:
+                    print("   ... Diagram rendering failed. Pivoting to photo.")
+                    slide_data['layout'] = "Photo Layout"
+        
+        if "Photo" in slide_data['layout'] or "Title" in slide_data['layout']:
+            photo_path = search_and_download_photo(keyword, title)
+            if photo_path:
+                slide_data['image_path'] = photo_path
+        
+        enriched_slides.append(slide_data)
 
-        if title:
-            notes = generate_speaker_notes(title, body)
-            slide["speaker_notes"] = notes
-
-    # 3. Create Presentation
-    output_file = create_presentation(slide_outline, topic)
-    
-    print("\n--- Process Complete! ---")
-    print(f"Presentation saved to: {output_file}")
-
+    print("\n--- Assembling Final Presentation ---")
+    create_presentation(enriched_slides, topic, style)
+    print("\n--- Presentation Generation Complete. ---")
 
 if __name__ == "__main__":
     main()
