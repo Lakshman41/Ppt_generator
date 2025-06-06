@@ -2,34 +2,25 @@ import requests
 import config
 from pathlib import Path
 
-def get_image_for_keyword(keyword: str) -> str | None:
+def search_for_images(keyword: str, num_candidates: int = 3) -> list | None:
     """
-    Searches for an image using the Pexels API and downloads it.
-    Checks cache first to avoid re-downloading.
+    Searches for a list of candidate images using the Pexels API.
 
     Args:
         keyword (str): The search term for the image.
+        num_candidates (int): The number of image candidates to return.
 
     Returns:
-        str | None: The file path of the downloaded image, or None on failure.
+        list | None: A list of dictionaries, each containing image info (id, url, alt),
+                      or None on failure.
     """
-    print(f"-> Searching for image with keyword: '{keyword}' (using Pexels)...")
-
-    # Sanitize keyword to create a valid filename
-    sanitized_keyword = "".join(c for c in keyword if c.isalnum() or c in " _-").rstrip()
-    cache_path = config.CACHE_DIR / f"{sanitized_keyword}.jpg"
-
-    # 1. Check cache
-    if cache_path.exists():
-        print("   ... Image found in cache.")
-        return str(cache_path)
-
-    # 2. Call the Pexels API
+    print(f"-> Searching for {num_candidates} image candidates for keyword: '{keyword}'...")
+    
     headers = {"Authorization": config.PEXELS_API_KEY}
     params = {
         "query": keyword,
         "orientation": "landscape",
-        "per_page": 1
+        "per_page": num_candidates
     }
     url = "https://api.pexels.com/v1/search"
 
@@ -39,20 +30,14 @@ def get_image_for_keyword(keyword: str) -> str | None:
 
         data = response.json()
         if data["photos"]:
-            # Pexels provides multiple sizes, 'large' or 'original' is good.
-            image_url = data["photos"][0]["src"]["large"] 
-            
-            # 3. Download the image
-            image_response = requests.get(image_url, stream=True, timeout=15)
-            image_response.raise_for_status()
-
-            # 4. Save to cache
-            with open(cache_path, 'wb') as f:
-                for chunk in image_response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            print(f"   ... Image downloaded and saved to {cache_path}")
-            return str(cache_path)
+            candidates = []
+            for photo in data["photos"]:
+                candidates.append({
+                    "id": photo["id"],
+                    "url": photo["src"]["large"], # The URL to download the image
+                    "alt": photo["alt"] # The description we will send to the LLM
+                })
+            return candidates
         else:
             print(f"   ... No results found for '{keyword}'.")
             return None
@@ -61,7 +46,40 @@ def get_image_for_keyword(keyword: str) -> str | None:
         print(f"An error occurred with the Pexels API request: {e}")
         return None
     except KeyError:
-        # This can happen if the API key is wrong and Pexels returns an error message
-        # instead of the expected JSON structure.
         print("   ... Error: Invalid response from Pexels. Check your API key.")
+        return None
+
+def download_image(image_url: str, keyword: str) -> str | None:
+    """
+    Downloads a chosen image and saves it to the cache.
+
+    Args:
+        image_url (str): The URL of the image to download.
+        keyword (str): The original search term, used for the filename.
+
+    Returns:
+        str | None: The file path of the downloaded image, or None on failure.
+    """
+    sanitized_keyword = "".join(c for c in keyword if c.isalnum() or c in " _-").rstrip()
+    cache_path = config.CACHE_DIR / f"{sanitized_keyword}.jpg"
+
+    # Don't re-download if the exact same keyword was used and chosen before
+    if cache_path.exists():
+        print("   ... Image was already in cache.")
+        return str(cache_path)
+    
+    print(f"   ... Downloading chosen image for '{keyword}'")
+    try:
+        image_response = requests.get(image_url, stream=True, timeout=15)
+        image_response.raise_for_status()
+
+        with open(cache_path, 'wb') as f:
+            for chunk in image_response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        print(f"   ... Image downloaded and saved to {cache_path}")
+        return str(cache_path)
+
+    except requests.exceptions.RequestException as e:
+        print(f"   ... Failed to download image: {e}")
         return None

@@ -1,12 +1,13 @@
 import argparse
-from orchestration.content_engine import generate_slide_outline
-from orchestration.image_engine import get_image_for_keyword
-from orchestration.visual_engine import create_presentation
 import config
 
+# Import the new function
+from orchestration.content_engine import generate_slide_outline, choose_best_image, generate_speaker_notes
+from orchestration.image_engine import search_for_images, download_image
+from orchestration.visual_engine import create_presentation
+
 def main():
-    # <<< THIS IS THE LINE TO FIX >>>
-    # Check if API keys are set, now looking for DeepSeek's key.
+    # Check if API keys are set
     if not config.DEEPSEEK_API_KEY or not config.PEXELS_API_KEY:
         print("Error: API keys for DeepSeek or Pexels are not set.")
         print("Please check your .env file.")
@@ -26,14 +27,29 @@ def main():
         print("--- Process failed: Could not generate content. ---")
         return
 
-    # 2. Fetch Images for each slide
+    # 2. Process each slide to find and select the best image
     for slide in slide_outline:
+        slide["image_path"] = None # Default to no image
         keyword = slide.get("image_keyword")
-        if keyword:
-            image_path = get_image_for_keyword(keyword)
-            slide["image_path"] = image_path # Add the path to the dict
-        else:
-            slide["image_path"] = None
+        title = slide.get("slide_title")
+        body = slide.get("slide_body", "")
+        
+        if keyword and title:
+            # Step 2a: Search for image candidates
+            image_candidates = search_for_images(keyword)
+            
+            if image_candidates:
+                # Step 2b: Use AI to choose the best image
+                chosen_image = choose_best_image(title, image_candidates)
+
+                if chosen_image:
+                    # Step 2c: Download ONLY the chosen image
+                    image_path = download_image(chosen_image['url'], keyword)
+                    slide["image_path"] = image_path
+
+        if title:
+            notes = generate_speaker_notes(title, body)
+            slide["speaker_notes"] = notes
 
     # 3. Create Presentation
     output_file = create_presentation(slide_outline, topic)
