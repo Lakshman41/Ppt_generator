@@ -54,6 +54,8 @@ pip install -r requirements.txt
 4. Set up environment variables:
 Create a `.env` file in the root directory with your API keys:
 ```
+DEEPSEEK_API_KEY=your_deepseek_api_key
+GEMINI_API_KEY=your_gemini_api_key
 PEXELS_API_KEY=your_pexels_api_key
 OPENAI_API_KEY=your_openai_api_key
 ```
