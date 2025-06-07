@@ -1,69 +1,69 @@
 import argparse
-import config # Imports the class-based config
-from orchestration.content_engine import (
-    generate_slide_outline,
-    decide_slide_layout,
-    generate_visual_keyword,
-    generate_diagram_code
-)
-from orchestration.image_engine import search_and_download_photo, render_diagram_local
+import os
+from dotenv import load_dotenv
+from orchestration.content_engine import generate_slide_outline, decide_slide_layout, generate_visual_keyword
 from orchestration.visual_engine import create_presentation
+from orchestration.image_engine import search_and_download_photo, get_supporting_images
 
 def main():
-    parser = argparse.ArgumentParser(description="The Majestic PPT Generator")
-    parser.add_argument("topic", type=str, help="The main topic of the presentation.")
-    parser.add_argument("--slides", type=int, default=5, help="Approximate number of slides.")
-    parser.add_argument("--style", type=str, default="dark", choices=["dark", "light"], help="Visual theme.")
-    args = parser.parse_args()
-
-    topic = args.topic
-    slide_count = args.slides
-    style = args.style
-    print(f"--- Generating the Majestic Presentation ---")
-    print(f"Topic: '{topic}', Slides: {slide_count}, Style: '{style}'")
+    # Load environment variables
+    load_dotenv()
     
-    # Use the new config class for validation
-    if not all([config.PPTConfig.API_KEYS['GOOGLE'], config.PPTConfig.API_KEYS['PEXELS']]):
-        print("FATAL: API keys are missing.")
+    # Check for required API keys
+    if not os.getenv('GEMINI_API_KEY'):
+        print("ERROR: GEMINI_API_KEY not found in .env file")
         return
-
-    slide_outline = generate_slide_outline(topic, slide_count)
-    if not slide_outline: return
-
-    print("\n--- Designing Individual Slides ---")
+    if not os.getenv('PEXELS_API_KEY'):
+        print("ERROR: PEXELS_API_KEY not found in .env file")
+        return
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Generate a professional PowerPoint presentation')
+    parser.add_argument('topic', type=str, help='The topic of the presentation')
+    parser.add_argument('--slides', type=int, default=6, help='Number of slides (default: 6)')
+    parser.add_argument('--style', type=str, default='dark', choices=['dark', 'light'], help='Presentation style (default: dark)')
+    args = parser.parse_args()
+    
+    print("\n--- Generating the Majestic Presentation ---")
+    print(f"Topic: '{args.topic}', Slides: {args.slides}, Style: '{args.style}'")
+    
+    # Generate slide outline
+    print("-> AI generating text outline...")
+    slides = generate_slide_outline(args.topic, args.slides)
+    if not slides:
+        print("ERROR: Failed to generate slide outline")
+        return
+    
+    # Enrich slides with images and layouts
     enriched_slides = []
-    themes = {'dark': {'primary': (52, 152, 219), 'secondary': (44, 62, 80)}}
-    theme_colors = themes.get(style, themes['dark'])
-
-    for i, slide_data in enumerate(slide_outline):
-        title, body = slide_data['slide_title'], slide_data['slide_body']
-        print(f"\n-> Designing Slide {i+1}: '{title}'")
-        layout = "Title Layout" if i == 0 else decide_slide_layout(title, body)
-        keyword = generate_visual_keyword(title, layout)
+    for i, slide_data in enumerate(slides):
+        print(f"\n-> Processing slide {i+1}: {slide_data['slide_title']}")
         
-        slide_data['layout'] = layout
-        slide_data['image_path'] = None
-
-        if "Diagram" in layout:
-            dot_code = generate_diagram_code(title, body, theme_colors)
-            if dot_code:
-                diagram_path = render_diagram_local(dot_code, title)
-                if diagram_path:
-                    slide_data['image_path'] = diagram_path
-                else:
-                    print("   ... Diagram rendering failed. Pivoting to photo.")
-                    slide_data['layout'] = "Photo Layout"
+        # Set layout
+        if i == 0:
+            slide_data['layout'] = "Title Layout"
+        else:
+            slide_data['layout'] = decide_slide_layout(slide_data)
         
-        if "Photo" in slide_data['layout'] or "Title" in slide_data['layout']:
-            photo_path = search_and_download_photo(keyword, title)
-            if photo_path:
-                slide_data['image_path'] = photo_path
+        # Generate and download background image
+        visual_keyword = generate_visual_keyword(slide_data['slide_title'], slide_data['slide_body'])
+        if visual_keyword:
+            print(f"-> Searching for background image: {visual_keyword}")
+            image_path = search_and_download_photo(visual_keyword, is_background=True)
+            if image_path:
+                slide_data['image_path'] = image_path
+        
+        # Get supporting images for non-title slides
+        if i > 0:
+            supporting_images = get_supporting_images(slide_data)
+            if supporting_images:
+                slide_data['supporting_images'] = supporting_images
         
         enriched_slides.append(slide_data)
-
-    print("\n--- Assembling Final Presentation ---")
-    create_presentation(enriched_slides, topic, style)
-    print("\n--- Presentation Generation Complete. ---")
+    
+    # Create the presentation
+    output_file = create_presentation(enriched_slides, args.topic, args.style)
+    print(f"\n-> Presentation generated successfully: {output_file}")
 
 if __name__ == "__main__":
     main()

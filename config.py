@@ -12,10 +12,8 @@ class PPTConfig:
     
     # --- API Configuration ---
     API_KEYS = {
-        'DEEPSEEK': os.getenv("DEEPSEEK_API_KEY"),
-        'PEXELS': os.getenv("PEXELS_API_KEY"),
-        'GOOGLE': os.getenv("GOOGLE_API_KEY"),
-        'UNSPLASH': os.getenv("UNSPLASH_ACCESS_KEY", "")  # Optional
+        'GEMINI': os.getenv("GEMINI_API_KEY"),
+        'PEXELS': os.getenv("PEXELS_API_KEY")
     }
     
     # --- File System Paths ---
@@ -40,16 +38,15 @@ class PPTConfig:
     # --- API Rate Limits ---
     RATE_LIMITS = {
         'pexels': 200,  # requests/hour
-        'unsplash': 50,
-        'google': 60    # requests/minute
+        'gemini': 60    # requests/minute
     }
     
     @classmethod
     def validate(cls) -> Tuple[bool, str]:
         """Validate critical configurations"""
         # Check API keys
-        if not cls.API_KEYS['GOOGLE']:
-            return False, "Google API key is required"
+        if not cls.API_KEYS['GEMINI']:
+            return False, "Gemini API key is required"
         if not cls.API_KEYS['PEXELS']:
             return False, "Pexels API key is required"
             

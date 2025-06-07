@@ -1,60 +1,88 @@
 import json
-import config
-import google.generativeai as genai
+from .gemini_client import gemini_chat
 
 # --- AI Configuration ---
-try:
-    # Use the new config class
-    genai.configure(api_key=config.PPTConfig.API_KEYS['GOOGLE'])
-except Exception as e:
-    print(f"CRITICAL: Could not configure Google Gemini API. Error: {e}")
 
-def generate_slide_outline(topic: str, slide_count: int) -> list | None:
-    print(f"-> AI generating text outline for '{topic}'...")
-    prompt = f'Create a presentation outline for the topic "{topic}". Generate exactly {slide_count} slides. For each slide, provide a "slide_title" and a "slide_body". Respond ONLY with a valid JSON list of objects.'
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        response = model.generate_content(prompt)
-        content = response.text.strip().replace("```json", "").replace("```", "").strip()
-        return json.loads(content)
-    except Exception as e:
-        print(f"   ... Error generating slide outline: {e}")
-        return None
+def generate_slide_outline(topic: str, num_slides: int) -> list:
+    """
+    Generate a structured outline for the presentation using Gemini.
+    """
+    prompt = f"""Generate a professional presentation outline for the topic '{topic}' with {num_slides} slides.
+    Each slide should have a title, body content, and visual focus.
+    Return the response in JSON format with the following structure:
+    [
+        {{
+            "slide_title": "string",
+            "slide_body": "string",
+            "visual_focus": "string",
+            "supporting_visuals": ["string"]
+        }}
+    ]
+    Make it engaging and include relevant statistics and examples."""
 
-def decide_slide_layout(slide_title: str, slide_body: str) -> str:
-    print(f"-> AI choosing layout for '{slide_title}'...")
+    response = gemini_chat(prompt)
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        prompt = f'For a slide titled "{slide_title}", which layout is best? Your ONLY options are "Photo Layout" or "Diagram Layout". Choose "Diagram Layout" if the topic is a process or concept. Otherwise, choose "Photo Layout". Respond with only the chosen layout name.'
-        response = model.generate_content(prompt)
-        layout = response.text.strip().replace('"', '')
-        return "Diagram Layout" if "Diagram" in layout else "Photo Layout"
-    except Exception as e:
-        print(f"   ... Layout decision failed ({e}). Defaulting to Photo Layout.")
-        return "Photo Layout"
+        # Extract JSON from the response
+        json_str = response.strip()
+        if json_str.startswith('```json'):
+            json_str = json_str[7:]
+        if json_str.endswith('```'):
+            json_str = json_str[:-3]
+        return json.loads(json_str.strip())
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON response: {e}")
+        print(f"Raw response: {response}")
+        return []
 
-def generate_visual_keyword(slide_title: str, layout: str) -> str:
-    print(f"-> AI generating visual keyword for '{slide_title}'...")
-    keyword_type = "a detailed, natural-language description of its purpose" if "Diagram" in layout else "a simple Pexels photo search term"
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        prompt = f'For a slide titled "{slide_title}", generate {keyword_type}. Respond with ONLY the keyword/description string.'
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"   ... Keyword generation failed ({e}). Defaulting to title.")
-        return slide_title
+def decide_slide_layout(slide_data: dict) -> str:
+    """
+    Decide the best layout for a slide based on its content using Gemini.
+    """
+    prompt = f"""Based on this slide content, suggest the best layout type:
+    Title: {slide_data.get('slide_title', '')}
+    Content: {slide_data.get('slide_body', '')}
+    Visual Focus: {slide_data.get('visual_focus', '')}
+    
+    Choose from these layouts:
+    - Title Layout (for first slide)
+    - Photo Layout (for slides with main image)
+    - Diagram Layout (for slides with charts/diagrams)
+    - Text Layout (for text-heavy slides)
+    
+    Return only the layout name."""
 
-def generate_diagram_code(slide_title: str, slide_body: str, theme_colors: dict) -> str | None:
-    print(f"-> Generating elegant skeleton diagram for: '{slide_title}'...")
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        primary_hex = '#%02x%02x%02x' % theme_colors['primary']
-        secondary_hex = '#%02x%02x%02x' % theme_colors['secondary']
-        prompt = f'Create a simple Graphviz DOT flowchart for "{slide_title}". Use `digraph G {{...}}`. Styles: `graph [bgcolor="transparent", fontname="Arial"]; node [shape=box, style="rounded,filled", fontname="Arial", fontcolor="white"]; edge [fontname="Arial", color="white"];`. Use short labels from "{slide_body}". Color key nodes with `fillcolor="{primary_hex}"` and others with `fillcolor="{secondary_hex}"`. Respond with ONLY raw DOT code.'
-        response = model.generate_content(prompt)
-        code = response.text.strip().replace("```dot", "").replace("```", "").strip()
-        return code
-    except Exception as e:
-        print(f"   ... Diagram code generation failed: {e}")
-        return None
+    response = gemini_chat(prompt)
+    return response.strip()
+
+def generate_visual_keyword(slide_title: str, slide_body: str) -> str:
+    """
+    Generate a keyword for image search using Gemini.
+    """
+    prompt = f"""Generate a specific, descriptive keyword for finding a relevant image for this slide:
+    Title: {slide_title}
+    Content: {slide_body}
+    
+    The keyword should be specific enough to find a relevant image but not too long.
+    Return only the keyword."""
+
+    response = gemini_chat(prompt)
+    return response.strip()
+
+def generate_diagram_code(slide_data: dict) -> str:
+    """
+    Generate Python code for creating a diagram using Gemini.
+    """
+    prompt = f"""Generate Python code using matplotlib to create a professional diagram for this slide:
+    Title: {slide_data.get('slide_title', '')}
+    Content: {slide_data.get('slide_body', '')}
+    
+    The code should:
+    1. Create a clear, professional visualization
+    2. Use appropriate colors and styling
+    3. Include proper labels and title
+    4. Save the output as a PNG file
+    
+    Return only the Python code."""
+
+    response = gemini_chat(prompt)
+    return response.strip()
