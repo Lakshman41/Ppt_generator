@@ -8,25 +8,26 @@ import io
 import os
 import json
 from .gemini_client import gemini_chat, gemini_vision
+from typing import Optional
 
 def search_and_download_photo(keyword: str, is_background: bool = False) -> str:
     """
     Search for and download a photo using Pexels API.
     """
-    # Use Pexels API to get a high-quality image
     pexels_api_key = os.getenv('PEXELS_API_KEY')
     if not pexels_api_key:
         print("WARNING: Pexels API key not found. Using placeholder image.")
         return None
 
     try:
-        # Search for the image
+        # Search for the image with enhanced parameters
         search_url = f"https://api.pexels.com/v1/search"
         params = {
             "query": keyword,
-            "per_page": 1,
+            "per_page": 3,  # Get multiple candidates
             "orientation": "landscape" if is_background else "any",
-            "size": "large"  # Request large images
+            "size": "large",
+            "color": "vibrant" if is_background else "any"  # Prefer vibrant colors for backgrounds
         }
         headers = {"Authorization": pexels_api_key}
         
@@ -38,7 +39,7 @@ def search_and_download_photo(keyword: str, is_background: bool = False) -> str:
             print(f"No images found for keyword: {keyword}")
             return None
             
-        # Get the image URL
+        # Get the best image URL (first one)
         image_url = data["photos"][0]["src"]["original"]
         
         # Download the image
@@ -62,7 +63,7 @@ def search_and_download_photo(keyword: str, is_background: bool = False) -> str:
         print(f"Error downloading photo: {e}")
         return None
 
-def render_diagram_local(dot_code: str, slide_title: str) -> str | None:
+def render_diagram_local(dot_code: str, slide_title: str) -> Optional[str]:
     print(f"-> Rendering diagram locally for '{slide_title}'...")
     filename = "diagram_" + hashlib.md5(slide_title.encode()).hexdigest() + ".png"
     cache_path = config.PPTConfig.PATHS['cache'] / filename
@@ -198,18 +199,29 @@ def optimize_image_for_ppt(image_path: str, is_background: bool = False) -> str:
         
         # Calculate target dimensions based on slide size (16:9 aspect ratio)
         if is_background:
-            target_width = 1920
-            target_height = 1080
+            # For background images, ensure they're large enough and maintain aspect ratio
+            target_width = 2560  # Increased for better quality
+            target_height = 1440
+            ratio = min(target_width/width, target_height/height)
+            target_width = int(width * ratio)
+            target_height = int(height * ratio)
         else:
             # For supporting images, maintain aspect ratio but limit size
-            max_width = 800
-            max_height = 600
+            max_width = 1200  # Increased for better quality
+            max_height = 900
             ratio = min(max_width/width, max_height/height)
             target_width = int(width * ratio)
             target_height = int(height * ratio)
         
         # Resize image using high-quality Lanczos resampling
         img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        
+        # Enhance image quality
+        if is_background:
+            # Increase contrast slightly for better visibility
+            from PIL import ImageEnhance
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.1)
         
         # Save optimized image
         output_dir = "output/images/optimized"
