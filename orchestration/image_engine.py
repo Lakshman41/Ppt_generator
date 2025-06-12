@@ -207,8 +207,8 @@ def optimize_image_for_ppt(image_path: str, is_background: bool = False) -> str:
             target_height = int(height * ratio)
         else:
             # For supporting images, maintain aspect ratio but limit size
-            max_width = 1200  # Increased for better quality
-            max_height = 900
+            max_width = 1000  # Increased for better quality
+            max_height = 750
             ratio = min(max_width/width, max_height/height)
             target_width = int(width * ratio)
             target_height = int(height * ratio)

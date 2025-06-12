@@ -62,7 +62,7 @@ def main():
         enriched_slides.append(slide_data)
     
     # Create the presentation
-    output_file = create_presentation(enriched_slides, args.topic, args.style)
+    output_file = create_presentation(enriched_slides, args.topic, args.style, args.slides)
     print(f"\n-> Presentation generated successfully: {output_file}")
 
 if __name__ == "__main__":
