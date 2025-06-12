@@ -16,7 +16,7 @@ import io
 from PIL import Image
 import requests
 from dotenv import load_dotenv
-import openai  # For future use
+#import openai  # For future use
 from typing import List, Dict, Optional, Tuple
 import matplotlib.pyplot as plt
 
@@ -48,7 +48,7 @@ def create_presentation(enriched_slides: list, topic: str, style: str = 'dark', 
             'secondary': RGBColor(52, 73, 94)
         }
     }
-    theme = themes.get(style, themes['dark'])
+    theme = themes.get(style, themes[style])
 
     # Add title slide
     slide = prs.slides.add_slide(blank_layout)
