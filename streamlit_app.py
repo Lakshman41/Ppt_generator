@@ -1,5 +1,7 @@
 import streamlit as st
 import os
+import shutil
+from pathlib import Path
 from dotenv import load_dotenv
 from orchestration.content_engine import generate_slide_outline, decide_slide_layout, generate_visual_keyword
 from orchestration.visual_engine import create_presentation
@@ -7,6 +9,30 @@ from orchestration.image_engine import search_and_download_photo, get_supporting
 
 # Load environment variables
 load_dotenv()
+
+def cleanup_output_directories():
+    """Clean up all generated images and diagrams from output directories."""
+    try:
+        # Clean up images directory
+        images_dir = Path("output/images")
+        if images_dir.exists():
+            shutil.rmtree(images_dir)
+            st.info("Cleaned up images directory")
+            
+        # Clean up diagrams directory
+        diagrams_dir = Path("output/diagrams")
+        if diagrams_dir.exists():
+            shutil.rmtree(diagrams_dir)
+            st.info("Cleaned up diagrams directory")
+            
+        # Clean up cache directory
+        cache_dir = Path("output/cache")
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir)
+            st.info("Cleaned up cache directory")
+            
+    except Exception as e:
+        st.warning(f"Warning: Error during cleanup: {str(e)}")
 
 # Page configuration
 st.set_page_config(
@@ -103,8 +129,14 @@ if submitted:
                             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
                         )
                 
+                # Clean up temporary files
+                st.info("🧹 Cleaning up temporary files...")
+                cleanup_output_directories()
+                
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
+                # Clean up even if there's an error
+                cleanup_output_directories()
 
 # Footer
 st.markdown("---")

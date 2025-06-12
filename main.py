@@ -1,9 +1,35 @@
 import argparse
 import os
+import shutil
+from pathlib import Path
 from dotenv import load_dotenv
 from orchestration.content_engine import generate_slide_outline, decide_slide_layout, generate_visual_keyword
 from orchestration.visual_engine import create_presentation
 from orchestration.image_engine import search_and_download_photo, get_supporting_images
+
+def cleanup_output_directories():
+    """Clean up all generated images and diagrams from output directories."""
+    try:
+        # Clean up images directory
+        images_dir = Path("output/images")
+        if images_dir.exists():
+            shutil.rmtree(images_dir)
+            print("-> Cleaned up images directory")
+            
+        # Clean up diagrams directory
+        diagrams_dir = Path("output/diagrams")
+        if diagrams_dir.exists():
+            shutil.rmtree(diagrams_dir)
+            print("-> Cleaned up diagrams directory")
+            
+        # Clean up cache directory
+        cache_dir = Path("output/cache")
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir)
+            print("-> Cleaned up cache directory")
+            
+    except Exception as e:
+        print(f"Warning: Error during cleanup: {str(e)}")
 
 def main():
     # Load environment variables
@@ -27,43 +53,49 @@ def main():
     print("\n--- Generating the Majestic Presentation ---")
     print(f"Topic: '{args.topic}', Slides: {args.slides}, Style: '{args.style}'")
     
-    # Generate slide outline
-    print("-> AI generating text outline...")
-    slides = generate_slide_outline(args.topic, args.slides)
-    if not slides:
-        print("ERROR: Failed to generate slide outline")
-        return
-    
-    # Enrich slides with images and layouts
-    enriched_slides = []
-    for i, slide_data in enumerate(slides):
-        print(f"\n-> Processing slide {i+1}: {slide_data['slide_title']}")
+    try:
+        # Generate slide outline
+        print("-> AI generating text outline...")
+        slides = generate_slide_outline(args.topic, args.slides)
+        if not slides:
+            print("ERROR: Failed to generate slide outline")
+            return
         
-        # Set layout
-        if i == 0:
-            slide_data['layout'] = "Title Layout"
-        else:
-            slide_data['layout'] = decide_slide_layout(slide_data)
+        # Enrich slides with images and layouts
+        enriched_slides = []
+        for i, slide_data in enumerate(slides):
+            print(f"\n-> Processing slide {i+1}: {slide_data['slide_title']}")
+            
+            # Set layout
+            if i == 0:
+                slide_data['layout'] = "Title Layout"
+            else:
+                slide_data['layout'] = decide_slide_layout(slide_data)
+            
+            # Generate and download background image
+            visual_keyword = generate_visual_keyword(slide_data['slide_title'], slide_data['slide_body'])
+            if visual_keyword:
+                print(f"-> Searching for background image: {visual_keyword}")
+                image_path = search_and_download_photo(visual_keyword, is_background=True)
+                if image_path:
+                    slide_data['image_path'] = image_path
+            
+            # Get supporting images for non-title slides
+            if i > 0:
+                supporting_images = get_supporting_images(slide_data)
+                if supporting_images:
+                    slide_data['supporting_images'] = supporting_images
+            
+            enriched_slides.append(slide_data)
         
-        # Generate and download background image
-        visual_keyword = generate_visual_keyword(slide_data['slide_title'], slide_data['slide_body'])
-        if visual_keyword:
-            print(f"-> Searching for background image: {visual_keyword}")
-            image_path = search_and_download_photo(visual_keyword, is_background=True)
-            if image_path:
-                slide_data['image_path'] = image_path
+        # Create the presentation
+        output_file = create_presentation(enriched_slides, args.topic, args.style, args.slides)
+        print(f"\n-> Presentation generated successfully: {output_file}")
         
-        # Get supporting images for non-title slides
-        if i > 0:
-            supporting_images = get_supporting_images(slide_data)
-            if supporting_images:
-                slide_data['supporting_images'] = supporting_images
-        
-        enriched_slides.append(slide_data)
-    
-    # Create the presentation
-    output_file = create_presentation(enriched_slides, args.topic, args.style, args.slides)
-    print(f"\n-> Presentation generated successfully: {output_file}")
+    finally:
+        # Clean up temporary files
+        print("\n-> Cleaning up temporary files...")
+        cleanup_output_directories()
 
 if __name__ == "__main__":
     main()
